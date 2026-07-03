@@ -6,6 +6,7 @@ namespace Pest\Browser\Playwright;
 
 use Amp\Websocket\Client\WebsocketConnection;
 use Generator;
+use Pest\Browser\Exceptions\PlaywrightErrorDetailsException;
 use Pest\Browser\Exceptions\PlaywrightOutdatedException;
 use PHPUnit\Framework\ExpectationFailedException;
 
@@ -88,7 +89,7 @@ final class Client
 
         while (true) {
             $responseJson = $this->fetch($this->websocketConnection);
-            /** @var array{id: string|null, params: array{add: string|null}, error: array{error: array{message: string|null}}} $response */
+            /** @var array{id: string|null, params: array{add: string|null}, error: array{error: array{message: string|null}}, errorDetails?: array<string, mixed>} $response */
             $response = json_decode($responseJson, true);
 
             if (isset($response['error']['error']['message'])) {
@@ -96,6 +97,10 @@ final class Client
 
                 if (str_contains($message, 'Playwright was just installed or updated')) {
                     throw new PlaywrightOutdatedException();
+                }
+
+                if (isset($response['errorDetails']) && is_array($response['errorDetails'])) {
+                    throw new PlaywrightErrorDetailsException($message, $response['errorDetails']);
                 }
 
                 throw new ExpectationFailedException($message);

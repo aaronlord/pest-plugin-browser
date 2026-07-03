@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pest\Browser\Playwright;
 
 use Generator;
+use Pest\Browser\Exceptions\PlaywrightErrorDetailsException;
 use Pest\Browser\Execution;
 use Pest\Browser\Support\ImageDiffView;
 use Pest\Browser\Support\JavaScriptSerializer;
@@ -257,11 +258,13 @@ final class Page
             'arg' => JavaScriptSerializer::serializeArgument($arg),
         ];
 
-        Client::instance()->execute(
-            $this->guid,
+        $response = Client::instance()->execute(
+            $this->frameGuid,
             'waitForFunction',
             $params
         );
+
+        $this->processVoidResponse($response);
 
         return $this;
     }
@@ -520,34 +523,36 @@ final class Page
                     'expected' => $expectedImageBlob,
                     'timeout' => 30000,
                     'isNot' => false,
-                    'comparisonMethod' => 'pixelmatch',
+                    'comparator' => 'pixelmatch',
                     'threshold' => 0.3,
                     'maxDiffPixels' => 300,
                     'maxDiffPixelRatio' => 0.01,
-                    'detectAntialiasing' => true,
-                    'forceSameDimensions' => true,
                 ]
             );
 
             $snapshotName = pathinfo($snapshotName, PATHINFO_FILENAME);
-            /** @var array{result: array{diff: string|null}} $message */
-            foreach ($response as $message) {
-                if (isset($message['result']['diff'])) {
+
+            try {
+                iterator_to_array($response);
+            } catch (PlaywrightErrorDetailsException $details) {
+                $diff = $details->details()['diff'] ?? null;
+
+                if (is_string($diff)) {
                     $this->createImageDiffView(
                         $snapshotName,
                         $expectedImageBlob,
                         $actualImageBlob,
-                        $message['result']['diff'],
+                        $diff,
                         $openDiff
                     );
-
-                    throw new ExpectationFailedException(<<<'EOT'
-                        Screenshot does not match the last one.
-                          - Expected? Update the snapshots with [--update-snapshots].
-                          - Not expected? Re-run the test with [--diff] to see the differences.
-                        EOT
-                    );
                 }
+
+                throw new ExpectationFailedException(<<<'EOT'
+                    Screenshot does not match the last one.
+                      - Expected? Update the snapshots with [--update-snapshots].
+                      - Not expected? Re-run the test with [--diff] to see the differences.
+                    EOT
+                );
             }
         }
     }
@@ -623,8 +628,6 @@ final class Page
             'goBack',
             'reload',
             'screenshot',
-            'waitForLoadState',
-            'waitForURL',
             'keyboardDown',
             'keyboardUp',
             'setViewportSize',
