@@ -56,6 +56,18 @@ final class Client
                 'headless' => Playwright::isHeadless(),
                 'ignoreHTTPSErrors' => true,
                 'bypassCSP' => true,
+                'args' => [
+                    // Headless Chromium's text rasterizer is not fully
+                    // deterministic run-to-run (subpixel positioning/hinting
+                    // jitter), which shows up as spurious screenshot diffs
+                    // on text-heavy pages. These flags force consistent,
+                    // repeatable text rendering.
+                    '--font-render-hinting=none',
+                    '--disable-lcd-text',
+                    '--disable-partial-raster',
+                    '--run-all-compositor-stages-before-draw',
+                    '--disable-skia-runtime-opts',
+                ],
             ]);
 
             $this->websocketConnection = connect(
